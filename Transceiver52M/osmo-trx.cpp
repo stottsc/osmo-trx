@@ -67,6 +67,7 @@ struct trx_config {
 	unsigned chans;
 	bool extref;
 	bool diversity;
+	bool flood;
 };
 
 ConfigurationTable gConfig;
@@ -116,7 +117,7 @@ bool testConfig()
  */
 bool trx_setup_config(struct trx_config *config)
 {
-	std::string refstr, divstr;
+	std::string refstr, divstr, fldstr;
 
 	if (!testConfig())
 		return false;
@@ -164,6 +165,7 @@ bool trx_setup_config(struct trx_config *config)
 
 	refstr = config->extref ? "Enabled" : "Disabled";
 	divstr = config->diversity ? "Enabled" : "Disabled";
+	fldstr = config->flood ? "Enabled" : "Disabled";
 
 	std::ostringstream ost("");
 	ost << "Config Settings" << std::endl;
@@ -175,6 +177,7 @@ bool trx_setup_config(struct trx_config *config)
 	ost << "   Samples-per-Symbol...... " << config->sps << std::endl;
 	ost << "   External Reference...... " << refstr << std::endl;
 	ost << "   Diversity............... " << divstr << std::endl;
+	ost << "   RACH Flood Test......... " << fldstr << std::endl;
 	std::cout << ost << std::endl;
 
 	return true;
@@ -226,11 +229,15 @@ RadioInterface *makeRadioInterface(struct trx_config *config,
  */
 Transceiver *makeTransceiver(struct trx_config *config, RadioInterface *radio)
 {
+	int flags = 0;
 	Transceiver *trx;
 	VectorFIFO *fifo;
 
+	if (config->flood)
+		flags |= TRX_FLG_FLOOD_TEST;
+
 	trx = new Transceiver(config->port, config->addr.c_str(), config->sps,
-			      config->chans, GSM::Time(3,0), radio);
+			      config->chans, GSM::Time(3,0), radio, flags);
 	if (!trx->init()) {
 		LOG(ALERT) << "Failed to initialize transceiver";
 		delete trx;
@@ -279,7 +286,8 @@ static void print_help()
 		"  -d    Enable dual channel diversity receiver\n"
 		"  -x    Enable external 10 MHz reference\n"
 		"  -s    Samples-per-symbol (1 or 4)\n"
-		"  -c    Number of ARFCN channels (default=1)\n",
+		"  -c    Number of ARFCN channels (default=1)\n"
+		"  -r    Run in RACH flood mode\n",
 		"EMERG, ALERT, CRT, ERR, WARNING, NOTICE, INFO, DEBUG");
 }
 
@@ -292,8 +300,9 @@ static void handle_options(int argc, char **argv, struct trx_config *config)
 	config->chans = 0;
 	config->extref = false;
 	config->diversity = false;
+	config->flood = false;
 
-	while ((option = getopt(argc, argv, "ha:l:i:p:c:dxs:")) != -1) {
+	while ((option = getopt(argc, argv, "ha:l:i:p:c:dxs:r")) != -1) {
 		switch (option) {
 		case 'h':
 			print_help();
@@ -327,6 +336,9 @@ static void handle_options(int argc, char **argv, struct trx_config *config)
 				print_help();
 				exit(0);
 			}
+			break;
+		case 'r':
+			config->flood = true;
 			break;
 		default:
 			print_help();

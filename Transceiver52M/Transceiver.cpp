@@ -75,15 +75,14 @@ void TransceiverState::init(size_t slot, signalVector *burst)
     fillerTable[i][slot] = new signalVector(*burst);
 }
 
-Transceiver::Transceiver(int wBasePort,
-			 const char *TRXAddress,
-			 size_t wSPS, size_t wChans,
-			 GSM::Time wTransmitLatency,
-			 RadioInterface *wRadioInterface)
+Transceiver::Transceiver(int wBasePort, const char *TRXAddress, size_t wSPS,
+			 size_t wChans, GSM::Time wTransmitLatency,
+			 RadioInterface *wRadioInterface, int flags)
   : mBasePort(wBasePort), mAddr(TRXAddress),
     mTransmitLatency(wTransmitLatency), mClockSocket(NULL),
     mRadioInterface(wRadioInterface), mSPSTx(wSPS), mSPSRx(1), mChans(wChans),
-    mOn(false), mTxFreq(0.0), mRxFreq(0.0), mPower(-10), mMaxExpectedDelay(0)
+    mOn(false), mTxFreq(0.0), mRxFreq(0.0), mPower(-10), mMaxExpectedDelay(0),
+    mFlags(flags)
 {
   GSM::Time startTime(random() % gHyperframe,0);
 
@@ -418,17 +417,20 @@ SoftVector *Transceiver::demodulate(TransceiverState *state,
   return demodulateBurst(burst, mSPSRx, amp, toa);
 }
 
-/*
- * Pull bursts from the FIFO and handle according to the slot
- * and burst correlation type. Equalzation is currently disabled. 
+/* Pull bursts from the receuve FIFO
+ *   Handle according to the slot and burst correlation type.
+ *   Equalzation is currently disabled. Presence of the RACH flood
+ *   flag will force RACH detection on all slots and demodulation
+ *   using a random symbol timing offset.
  */
 SoftVector *Transceiver::pullRadioVector(GSM::Time &wTime, int &RSSI,
                                          int &timingOffset, size_t chan)
 {
-  bool success, equalize = false;
+  int success, max_i = -1;
+  bool equalize = false;
+  bool flood = mFlags & TRX_FLG_FLOOD_TEST;
   complex amp;
   float toa, pow, max = -1.0, avg = 0.0;
-  int max_i = -1;
   signalVector *burst;
   SoftVector *bits = NULL;
   TransceiverState *state = &mStates[chan];
@@ -441,6 +443,8 @@ SoftVector *Transceiver::pullRadioVector(GSM::Time &wTime, int &RSSI,
   /* Set time and determine correlation type */
   GSM::Time time = radio_burst->getTime();
   CorrType type = expectedCorrType(time, chan);
+  if (flood)
+    type = RACH;
 
   if ((type == OFF) || (type == IDLE)) {
     delete radio_burst;
@@ -474,17 +478,24 @@ SoftVector *Transceiver::pullRadioVector(GSM::Time &wTime, int &RSSI,
   else
     success = detectRACH(state, *burst, amp, toa);
 
-  if (!success) {
+  if (success < 0) {
+    LOG(ALERT) << "Burst detection error";
+  } else if (!success) {
     state->mNoises.insert(avg);
-    delete radio_burst;
-    return NULL;
+
+    if (flood) {
+      toa = (float) rand() / 5.0f;
+    } else {
+      delete radio_burst;
+      return NULL;
+    }
   }
 
   /* Demodulate and set output info */
   if (equalize && (type != TSC))
     equalize = false;
 
-  if (avg - state->mNoiseLev > 0.0)
+  if (flood || (avg - state->mNoiseLev > 0.0))
     bits = demodulate(state, *burst, amp, toa, time.TN(), equalize);
 
   wTime = time;

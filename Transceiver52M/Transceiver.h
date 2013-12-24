@@ -30,6 +30,8 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
+#define TRX_FLG_FLOOD_TEST	(1 << 0) /* RACH flood test */
+
 class Transceiver;
 
 /** Channel descriptor for transceiver object and channel number pair */
@@ -163,7 +165,8 @@ private:
   double mRxFreq;                      ///< the receive frequency
   int mPower;                          ///< the transmit power in dB
   unsigned mTSC;                       ///< the midamble sequence code
-  unsigned mMaxExpectedDelay;            ///< maximum expected time-of-arrival offset in GSM symbols
+  unsigned mMaxExpectedDelay;          ///< maximum expected time-of-arrival offset in GSM symbols
+  int mFlags;                          ///< option flags
 
   std::vector<TransceiverState> mStates;
 
@@ -176,11 +179,9 @@ public:
       @param wTransmitLatency initial setting of transmit latency
       @param radioInterface associated radioInterface object
   */
-  Transceiver(int wBasePort,
-	      const char *TRXAddress,
-	      size_t wSPS, size_t chans,
-	      GSM::Time wTransmitLatency,
-	      RadioInterface *wRadioInterface);
+  Transceiver(int wBasePort, const char *TRXAddress, size_t wSPS,
+	      size_t chans, GSM::Time wTransmitLatency,
+	      RadioInterface *wRadioInterface, int flags);
 
   /** Destructor */
   ~Transceiver();
