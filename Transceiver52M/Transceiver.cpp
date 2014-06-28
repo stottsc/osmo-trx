@@ -469,7 +469,7 @@ bool Transceiver::correctFCCH(TransceiverState *state, signalVector *burst)
     return false;
 
   offset = gsm_fcch_offset((float *) burst->begin(), burst->size());
-  if (offset > FCCH_OFFSET_LIMIT)
+  if (fabs(offset) > FCCH_OFFSET_LIMIT)
     return false;
 
   state->mFreqOffsets.insert(offset);
