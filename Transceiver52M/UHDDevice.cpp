@@ -278,7 +278,7 @@ public:
 	enum TxWindowType getWindowType() { return tx_window; }
 
 	int readSamples(std::vector<short *> &bufs, int len, bool *overrun,
-			TIMESTAMP timestamp, bool *underrun, unsigned *RSSI);
+			std::vector<TIMESTAMP> &timestamp, bool *underrun, unsigned *RSSI);
 
 	int writeSamples(std::vector<short *> &bufs, int len, bool *underrun,
 			 TIMESTAMP timestamp, bool isControl);
@@ -867,7 +867,7 @@ int uhd_device::check_rx_md_err(uhd::rx_metadata_t &md, ssize_t num_smpls)
 }
 
 int uhd_device::readSamples(std::vector<short *> &bufs, int len, bool *overrun,
-			    TIMESTAMP timestamp, bool *underrun, unsigned *RSSI)
+			    std::vector<TIMESTAMP> &timestamp, bool *underrun, unsigned *RSSI)
 {
 	ssize_t rc;
 	uhd::time_spec_t ts;
@@ -881,14 +881,19 @@ int uhd_device::readSamples(std::vector<short *> &bufs, int len, bool *overrun,
 	*overrun = false;
 	*underrun = false;
 
-	// Shift read time with respect to transmit clock
-	timestamp += ts_offset;
+	TIMESTAMP high = 0;
+	for (size_t i = 0; i < timestamp.size(); i++) {
+		timestamp[i] += ts_offset;
 
-	ts = convert_time(timestamp, rx_rate);
+		if (timestamp[i] > high)
+			high = timestamp[i];
+	}
+
+	ts = convert_time(high, rx_rate);
 	LOG(DEBUG) << "Requested timestamp = " << ts.get_real_secs();
 
 	// Check that timestamp is valid
-	rc = rx_buffers[0]->avail_smpls(timestamp);
+	rc = rx_buffers[0]->avail_smpls(high);
 	if (rc < 0) {
 		LOG(ERR) << rx_buffers[0]->str_code(rc);
 		LOG(ERR) << rx_buffers[0]->str_status();
@@ -904,7 +909,7 @@ int uhd_device::readSamples(std::vector<short *> &bufs, int len, bool *overrun,
 		pkt_ptrs.push_back(&pkt_bufs[i].front());
 
 	// Receive samples from the usrp until we have enough
-	while (rx_buffers[0]->avail_smpls(timestamp) < len) {
+	while (rx_buffers[0]->avail_smpls(high) < len) {
 		size_t num_smpls = rx_stream->recv(pkt_ptrs, rx_spp,
 						   metadata, 0.1, true);
 		rx_pkt_cnt++;
@@ -942,11 +947,11 @@ int uhd_device::readSamples(std::vector<short *> &bufs, int len, bool *overrun,
 
 	// We have enough samples
 	for (size_t i = 0; i < rx_buffers.size(); i++) {
-		rc = rx_buffers[i]->read(bufs[i], len, timestamp);
+		rc = rx_buffers[i]->read(bufs[i], len, timestamp[i]);
 		if ((rc < 0) || (rc != len)) {
 			LOG(ERR) << rx_buffers[i]->str_code(rc);
 			LOG(ERR) << rx_buffers[i]->str_status();
-			return 0;
+			return len;
 		}
 	}
 

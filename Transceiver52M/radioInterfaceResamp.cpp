@@ -184,11 +184,16 @@ void RadioInterfaceResamp::pullBuffer()
 	if (recvCursor > innerRecvBuffer->size() - resamp_inchunk)
 		return;
 
+	std::vector<TIMESTAMP> ts(0, mChans);
+
+	for (size_t i = 0; i < ts.size(); i++)
+		ts[i] = readTimestamp + shiftOffset[i];
+
 	/* Outer buffer access size is fixed */
 	num_recv = mRadio->readSamples(convertRecvBuffer,
 				       resamp_outchunk,
 				       &overrun,
-				       readTimestamp + shiftOffset,
+				       ts,
 				       &local_underrun);
 	if (num_recv != (int) resamp_outchunk) {
 		LOG(ALERT) << "Receive error " << num_recv;

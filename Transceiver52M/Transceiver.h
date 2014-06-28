@@ -157,10 +157,10 @@ private:
 
   bool detectSCH(TransceiverState *state,
                   signalVector &burst,
-                  complex &amp, float &toa);
+                  complex &amp, float &toa, int chan);
 
   bool decodeSCH(SoftVector *burst, GSM::Time *time);
-  bool correctFCCH(TransceiverState *state, signalVector *burst);
+  bool correctFCCH(TransceiverState *state, signalVector *burst, int chan);
 
   /** Detect normal bursts */
   bool detectTSC(TransceiverState *state,
@@ -170,7 +170,7 @@ private:
   /** Demodulat burst and output soft bits */
   SoftVector *demodulate(TransceiverState *state,
                          signalVector &burst, complex amp,
-                         float toa, size_t tn, bool equalize);
+                         float toa, size_t tn, bool equalize, int chan);
 
 
   int mSPSTx;                          ///< number of samples per Tx symbol

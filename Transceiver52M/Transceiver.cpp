@@ -45,7 +45,7 @@ using namespace GSM;
 
 /* Number of running values use in noise average */
 #define NOISE_CNT			20
-#define FREQ_CNT			20
+#define FREQ_CNT			1
 
 TransceiverState::TransceiverState()
   : mRetrans(false), mNoiseLev(0.0),
@@ -108,7 +108,9 @@ Transceiver::Transceiver(int wBasePort,
   mTransmitDeadlineClock = startTime;
   mLastClockUpdateTime = startTime;
   mLatencyUpdateTime = startTime;
-  mRadioInterface->getClock()->set(startTime);
+
+  for (size_t i = 0; i < wChans; i++)
+    mRadioInterface->getClock(i)->set(startTime);
 
   txFullScale = mRadioInterface->fullScaleInputValue();
   rxFullScale = mRadioInterface->fullScaleOutputValue();
@@ -389,7 +391,7 @@ bool Transceiver::detectRACH(TransceiverState *state,
 /* Detect SCH synchronization sequence within a burst */
 bool Transceiver::detectSCH(TransceiverState *state,
                             signalVector &burst,
-                            complex &amp, float &toa)
+                            complex &amp, float &toa, int chan)
 {
   int shift, full;;
   float mag, threshold = 7.0;
@@ -397,7 +399,7 @@ bool Transceiver::detectSCH(TransceiverState *state,
   full = (state->mode == TRX_MODE_MS_TRACK) ?
 	 SCH_DETECT_NARROW : SCH_DETECT_FULL;
 
-  if (!detectSCHBurst(burst, threshold, mSPSRx, &amp, &toa, full))
+  if (!detectSCHBurst(burst, threshold, mSPSRx, &amp, &toa, full, chan))
     return false;
 
   std::cout << "SCH : Timing offset     " << toa << " symbols" << std::endl;
@@ -410,7 +412,7 @@ bool Transceiver::detectSCH(TransceiverState *state,
   if (!shift)
     shift++;
 
-  mRadioInterface->applyOffset(toa > 0 ? shift : -shift);
+  mRadioInterface->applyOffset(toa > 0 ? shift : -shift, chan);
   return false;
 }
 
@@ -461,7 +463,7 @@ bool Transceiver::decodeSCH(SoftVector *burst, GSM::Time *time)
 #define FCCH_ADJUST_LIMIT	20.0
 
 /* Apply FCCH frequency correction */
-bool Transceiver::correctFCCH(TransceiverState *state, signalVector *burst)
+bool Transceiver::correctFCCH(TransceiverState *state, signalVector *burst, int chan)
 {
   double offset, avg;
 
@@ -479,7 +481,6 @@ bool Transceiver::correctFCCH(TransceiverState *state, signalVector *burst)
     std::cout << "FCCH: Frequency offset  " << avg << " Hz" << std::endl;
 
   if (state->mFreqOffsets.full() && (fabs(avg) > FCCH_ADJUST_LIMIT)) {
-    mRadioInterface->tuneRxOffset(-avg);
     state->mFreqOffsets.reset();
   }
 
@@ -543,7 +544,7 @@ bool Transceiver::detectTSC(TransceiverState *state, signalVector &burst,
  */
 SoftVector *Transceiver::demodulate(TransceiverState *state,
                                     signalVector &burst, complex amp,
-                                    float toa, size_t tn, bool equalize)
+                                    float toa, size_t tn, bool equalize, int chan)
 {
   if (equalize) {
     scaleVector(burst, complex(1.0, 0.0) / amp);
@@ -554,7 +555,7 @@ SoftVector *Transceiver::demodulate(TransceiverState *state,
                          *state->DFEFeedback[tn]);
   }
 
-  return demodulateBurst(burst, mSPSRx, amp, toa);
+  return demodulateBurst(burst, mSPSRx, amp, toa, chan);
 }
 
 /*
@@ -626,7 +627,7 @@ SoftVector *Transceiver::pullRadioVector(GSM::Time &wTime, int &RSSI,
   else if (type == RACH)
     success = detectRACH(state, *burst, amp, toa);
   else if (type == SCH)
-    success = detectSCH(state, *burst, amp, toa);
+    success = detectSCH(state, *burst, amp, toa, chan);
   else
     success = false;
 
@@ -642,27 +643,27 @@ SoftVector *Transceiver::pullRadioVector(GSM::Time &wTime, int &RSSI,
   /* Ignore noise threshold on MS mode for now */
   if ((type == SCH) || (avg - state->mNoiseLev > 0.0))
     bits = demodulate(state, *burst, amp, toa,
-		      burst_time.TN(), equalize);
+		      burst_time.TN(), equalize, chan);
 
   /* MS: Decode SCH and adjust GSM clock */
   if ((state->mode == TRX_MODE_MS_ACQUIRE) ||
       (state->mode == TRX_MODE_MS_TRACK)) {
-    correctFCCH(state, state->prevFrame[burst_time.TN()]->getVector());
+    correctFCCH(state, state->prevFrame[burst_time.TN()]->getVector(), chan);
 
     if (decodeSCH(bits, &sch_time)) {
       if (state->mode == TRX_MODE_MS_ACQUIRE) {
           diff_time = GSM::Time(sch_time.FN() - burst_time.FN(),
                                 -burst_time.TN());
-          mRadioInterface->adjustClock(diff_time);
-          state->mode = TRX_MODE_MS_TRACK;
+          mRadioInterface->adjustClock(diff_time, chan);
 
           std::cout << "SCH : Locking GSM clock " << std::endl;
       } else {
         std::cout << "SCH : Read SCH at FN " << burst_time.FN()
                   << " FN51 " << burst_time.FN() % 51 << std::endl;
       }
+    } else {
+      goto release;
     }
-    goto release;
   }
 
   wTime = burst_time;
@@ -866,7 +867,7 @@ void Transceiver::driveControl(size_t chan)
     sprintf(response,"RSP SETSLOT 0 %d %d",timeslot,corrCode);
   }
   else if (!strcmp(command, "SYNC")) {
-    mStates[0].mode = TRX_MODE_MS_ACQUIRE;
+    mStates[chan].mode = TRX_MODE_MS_ACQUIRE;
     sprintf(response,"RSP SYNC 0");
   }
   else {
@@ -976,7 +977,7 @@ void Transceiver::driveTxFIFO()
   */
 
 
-  RadioClock *radioClock = (mRadioInterface->getClock());
+  RadioClock *radioClock = (mRadioInterface->getClock(0));
   
   if (mOn) {
     //radioClock->wait(); // wait until clock updates

@@ -53,10 +53,10 @@ protected:
   TIMESTAMP writeTimestamp;		      ///< sample timestamp of next packet written to USRP
   TIMESTAMP readTimestamp;		      ///< sample timestamp of next packet read from USRP
 
-  RadioClock mClock;                          ///< the basestation clock!
+  std::vector<RadioClock> mClock;                          ///< the basestation clock!
 
   int receiveOffset;                          ///< offset b/w transmit and receive GSM timestamps, in timeslots
-  int shiftOffset;
+  std::vector<int> shiftOffset;
   bool mOn;				      ///< indicates radio is on
 
 private:
@@ -94,16 +94,16 @@ public:
 
   /** check for underrun, resets underrun value */
   bool isUnderrun();
-  void applyOffset(int offset) { shiftOffset += offset; }
+  void applyOffset(int offset, int chan) { shiftOffset[chan] += offset; }
 
   /** return the receive FIFO */
   VectorFIFO* receiveFIFO(size_t chan = 0);
 
   /** return the basestation clock */
-  RadioClock* getClock(void) { return &mClock;};
+  RadioClock* getClock(int chan) { return &mClock[chan];};
 
   /** apply an offset to the main clock */
-  void adjustClock(GSM::Time &offset);
+  void adjustClock(GSM::Time &offset, int chan);
 
   /** set transmit frequency */
   bool tuneTx(double freq, size_t chan = 0);

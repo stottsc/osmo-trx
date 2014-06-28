@@ -197,7 +197,7 @@ int detectSCHBurst(signalVector &rxBurst,
                     float detectThreshold,
                     int sps,
                     complex *amplitude,
-                    float* TOA, int state);
+                    float* TOA, int state, int chan);
 
 /**
         Normal burst correlator, detector, channel estimator.
@@ -242,7 +242,7 @@ signalVector *decimateVector(signalVector &wVector, size_t factor);
         @return The demodulated bit sequence.
 */
 SoftVector *demodulateBurst(signalVector &rxBurst, int sps,
-                            complex channel, float TOA);
+                            complex channel, float TOA, int chan);
 
 /**
 	Design the necessary filters for a decision-feedback equalizer.

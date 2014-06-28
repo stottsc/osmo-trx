@@ -38,9 +38,11 @@ RadioInterface::RadioInterface(RadioDevice *wRadio,
                                int wReceiveOffset, GSM::Time wStartTime)
   : mRadio(wRadio), mSPSTx(sps), mSPSRx(1), mChans(chans), mMIMO(diversity),
     sendCursor(0), recvCursor(0), underrun(false), overrun(false),
-    receiveOffset(wReceiveOffset), shiftOffset(0), mOn(false)
+    receiveOffset(wReceiveOffset), shiftOffset(chans), mOn(false),
+    mClock(chans)
 {
-  mClock.set(wStartTime);
+  for (size_t i = 0; i < mClock.size(); i++)
+    mClock[i].set(wStartTime);
 }
 
 RadioInterface::~RadioInterface(void)
@@ -157,9 +159,9 @@ int RadioInterface::unRadioifyVector(float *floatVector,
   return newVector.size();
 }
 
-void RadioInterface::adjustClock(GSM::Time &offset)
+void RadioInterface::adjustClock(GSM::Time &offset, int chan)
 {
-  mClock.adjust(offset);
+  mClock[chan].adjust(offset);
 }
 
 bool RadioInterface::tuneTx(double freq, size_t chan)
@@ -236,7 +238,7 @@ bool RadioInterface::driveReceiveRadio()
 
   pullBuffer();
 
-  GSM::Time rcvClock = mClock.get();
+  GSM::Time rcvClock = mClock[0].get();
   rcvClock.decTN(receiveOffset);
   unsigned tN = rcvClock.TN();
   int recvSz = recvCursor;
@@ -256,6 +258,8 @@ bool RadioInterface::driveReceiveRadio()
    */
   while (recvSz > burstSize) {
     for (size_t i = 0; i < mChans; i++) {
+      rcvClock = mClock[i].get();
+
       burst = new radioVector(rcvClock, burstSize, head, mMIMO);
 
       for (size_t n = 0; n < mMIMO; n++) {
@@ -270,7 +274,9 @@ bool RadioInterface::driveReceiveRadio()
         delete burst;
     }
 
-    mClock.incTN();
+    for (size_t i = 0; i < mChans; i++)
+      mClock[i].incTN();
+
     rcvClock.incTN();
     readSz += burstSize;
     recvSz -= burstSize;
@@ -335,11 +341,16 @@ void RadioInterface::pullBuffer()
   if (recvCursor > recvBuffer[0]->size() - CHUNK)
     return;
 
+  std::vector<TIMESTAMP> ts(mChans);
+
+  for (size_t i = 0; i < ts.size(); i++)
+    ts[i] = readTimestamp + shiftOffset[i];
+
   /* Outer buffer access size is fixed */
   num_recv = mRadio->readSamples(convertRecvBuffer,
                                  CHUNK,
                                  &overrun,
-                                 readTimestamp + shiftOffset,
+                                 ts,
                                  &local_underrun);
   if (num_recv != CHUNK) {
           LOG(ALERT) << "Receive error " << num_recv;

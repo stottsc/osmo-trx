@@ -68,7 +68,7 @@ class RadioDevice {
 	@return The number of samples actually read
   */
   virtual int readSamples(std::vector<short *> &bufs, int len, bool *overrun,
-                          TIMESTAMP timestamp = 0xffffffff, bool *underrun = 0,
+                          std::vector<TIMESTAMP> &timestamp, bool *underrun = 0,
                           unsigned *RSSI = 0) = 0;
   /**
         Write samples to the radio.

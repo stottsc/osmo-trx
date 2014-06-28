@@ -1404,7 +1404,7 @@ bool energyDetect(signalVector &rxBurst,
 static int detectBurst(signalVector &burst,
                        signalVector &corr, CorrelationSequence *sync,
                        float thresh, int sps, complex *amp, float *toa,
-                       int start, int len)
+                       int start, int len, int chan)
 {
   /* Correlate */
   if (!convolve(&burst, sync->sequence, &corr,
@@ -1471,7 +1471,7 @@ int detectRACHBurst(signalVector &rxBurst,
   corr = new signalVector(len);
 
   rc = detectBurst(rxBurst, *corr, sync,
-                   thresh, sps, &_amp, &_toa, start, len);
+                   thresh, sps, &_amp, &_toa, start, len, 0);
   delete corr;
 
   if (rc < 0) {
@@ -1497,7 +1497,7 @@ int detectSCHBurst(signalVector &burst,
 		    float thresh,
 		    int sps,
 		    complex *amp,
-		    float *toa, int state)
+		    float *toa, int state, int chan)
 {
   int rc, start, target, head, tail, len;
   float _toa;
@@ -1536,7 +1536,7 @@ int detectSCHBurst(signalVector &burst,
          sync->sequence->size() * sizeof(complex));
 
   rc = detectBurst(*_burst, *corr, sync,
-                   thresh, sps, &_amp, &_toa, start, len);
+                   thresh, sps, &_amp, &_toa, start, len, chan);
   delete corr;
 
   if (rc < 0) {
@@ -1589,7 +1589,7 @@ int analyzeTrafficBurst(signalVector &rxBurst, unsigned tsc, float thresh,
   corr = new signalVector(len);
 
   rc = detectBurst(rxBurst, *corr, sync,
-                   thresh, sps, &_amp, &_toa, start, len);
+                   thresh, sps, &_amp, &_toa, start, len, 0);
   delete corr;
 
   if (rc < 0) {
@@ -1638,7 +1638,7 @@ signalVector *decimateVector(signalVector &wVector, size_t factor)
 }
 
 SoftVector *demodulateBurst(signalVector &rxBurst, int sps,
-                            complex channel, float TOA)
+                            complex channel, float TOA, int chan)
 {
   signalVector *delay, *dec = NULL;
   SoftVector *bits;
