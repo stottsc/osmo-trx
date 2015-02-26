@@ -824,7 +824,7 @@ bool uhd_device::restart()
 	cmd.stream_now = false;
 	cmd.time_spec = uhd::time_spec_t(current.get_real_secs() + delay);
 
-	usrp_dev->issue_stream_cmd(cmd);
+	rx_stream->issue_stream_cmd(cmd);
 
 	return flush_recv(10);
 }
@@ -865,7 +865,7 @@ bool uhd_device::stop()
 	uhd::stream_cmd_t stream_cmd =
 		uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS;
 
-	usrp_dev->issue_stream_cmd(stream_cmd);
+	rx_stream->issue_stream_cmd(stream_cmd);
 
 	async_event_thrd->cancel();
 	async_event_thrd->join();
