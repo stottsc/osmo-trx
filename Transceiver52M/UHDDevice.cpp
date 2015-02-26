@@ -36,6 +36,7 @@
 #define E1XX_CLK_RT      52e6
 #define B100_BASE_RT     400000
 #define USRP2_BASE_RT    390625
+#define NOVENA_BASE_RT   480000
 #define TX_AMPL          0.3
 #define SAMPLE_BUF_SZ    (1 << 20)
 
@@ -57,6 +58,7 @@ enum uhd_dev_type {
 	E3XX,
 	X3XX,
 	UMTRX,
+	NOVENA,
 	NUM_USRP_TYPES,
 };
 
@@ -96,6 +98,8 @@ static struct uhd_dev_offset uhd_offsets[NUM_USRP_TYPES * 2] = {
 	{ X3XX,  4, 1.1264e-4, "X3XX 4 SPS"},
 	{ UMTRX, 1, 9.9692e-5, "UmTRX 1 SPS" },
 	{ UMTRX, 4, 7.3846e-5, "UmTRX 4 SPS" },
+	{ NOVENA, 1, 145.801000e-6, "Novena 1 SPS" }, //measured rtt delay @ GSM rate
+	{ NOVENA, 4, 38.541000e-6 + 4.430769230769231e-05, "Novena 4 SPS" }, //measured rtt delay @ GSM rate*4 + internal filter delay
 };
 
 /*
@@ -183,6 +187,8 @@ static double select_rate(uhd_dev_type type, int sps, bool diversity = false)
 	case E3XX:
 	case UMTRX:
 		return GSMRATE * sps;
+	case NOVENA:
+		return NOVENA_BASE_RT * sps;
 	default:
 		break;
 	}
@@ -585,7 +591,7 @@ bool uhd_device::parse_dev_type()
 	std::string mboard_str, dev_str;
 	uhd::property_tree::sptr prop_tree;
 	size_t usrp1_str, usrp2_str, e100_str, e110_str, e310_str,
-	       b100_str, b200_str, b210_str, x300_str, x310_str, umtrx_str;
+	       b100_str, b200_str, b210_str, x300_str, x310_str, umtrx_str, novena_str;
 
 	prop_tree = usrp_dev->get_device()->get_tree();
 	dev_str = prop_tree->access<std::string>("/name").get();
@@ -602,6 +608,7 @@ bool uhd_device::parse_dev_type()
 	x300_str = mboard_str.find("X300");
 	x310_str = mboard_str.find("X310");
 	umtrx_str = dev_str.find("UmTRX");
+	novena_str = dev_str.find("NOVENA");
 
 	if (usrp1_str != std::string::npos) {
 		LOG(ALERT) << "USRP1 is not supported using the UHD driver";
@@ -640,6 +647,9 @@ bool uhd_device::parse_dev_type()
 	} else if (umtrx_str != std::string::npos) {
 		tx_window = TX_WINDOW_FIXED;
 		dev_type = UMTRX;
+	} else if (novena_str != std::string::npos) {
+		tx_window = TX_WINDOW_FIXED;
+		dev_type = NOVENA;
 	} else {
 		LOG(ALERT) << "Unknown UHD device type " << dev_str;
 		return false;
@@ -753,6 +763,8 @@ int uhd_device::open(const std::string &args, bool extref)
 	case USRP2:
 	case X3XX:
 		return RESAMP_100M;
+	case NOVENA:
+		return RESAMP_30_72M;
 	case B200:
 	case B210:
 	case E1XX:

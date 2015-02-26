@@ -36,6 +36,9 @@ extern "C" {
 #define RESAMP_100M_INRATE			52
 #define RESAMP_100M_OUTRATE			75
 
+#define RESAMP_30_72M_INRATE			325
+#define RESAMP_30_72M_OUTRATE			576
+
 /* Universal resampling parameters */
 #define NUMCHUNKS				24
 
@@ -121,6 +124,10 @@ bool RadioInterfaceResamp::init(int type)
 	case RadioDevice::RESAMP_100M:
 		resamp_inrate = RESAMP_100M_INRATE;
 		resamp_outrate = RESAMP_100M_OUTRATE;
+		break;
+	case RadioDevice::RESAMP_30_72M:
+		resamp_inrate = RESAMP_30_72M_INRATE;
+		resamp_outrate = RESAMP_30_72M_OUTRATE;
 		break;
 	case RadioDevice::NORMAL:
 	default:
