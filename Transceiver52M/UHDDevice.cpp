@@ -1199,7 +1199,7 @@ bool uhd_device::recv_async_msg()
 	uhd::async_metadata_t md;
 
 	thread_enable_cancel(false);
-	bool rc = usrp_dev->get_device()->recv_async_msg(md);
+	bool rc = tx_stream->recv_async_msg(md);
 	thread_enable_cancel(true);
 	if (!rc)
 		return false;
