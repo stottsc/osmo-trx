@@ -39,7 +39,8 @@
 #define E1XX_CLK_RT      52e6
 #define B100_BASE_RT     400000
 #define USRP2_BASE_RT    390625
-#define TX_AMPL          0.3
+#define USRP_TX_AMPL     0.3
+#define UMTRX_TX_AMPL    0.7
 #define SAMPLE_BUF_SZ    (1 << 20)
 
 /*
@@ -333,8 +334,8 @@ public:
 	TIMESTAMP initialWriteTimestamp();
 	TIMESTAMP initialReadTimestamp();
 
-	inline double fullScaleInputValue() { return 32000 * TX_AMPL; }
-	inline double fullScaleOutputValue() { return 32000; }
+	double fullScaleInputValue();
+	double fullScaleOutputValue();
 
 	double setRxGain(double db, size_t chan);
 	double getRxGain(size_t chan);
@@ -1248,6 +1249,19 @@ double uhd_device::getRxFreq(size_t chan)
 	}
 
 	return rx_freqs[chan];
+}
+
+double uhd_device::fullScaleInputValue()
+{
+	if (dev_type == UMTRX)
+		return (double) SHRT_MAX * UMTRX_TX_AMPL;
+	else
+		return (double) SHRT_MAX * USRP_TX_AMPL;
+}
+
+double uhd_device::fullScaleOutputValue()
+{
+	return (double) SHRT_MAX;
 }
 
 bool uhd_device::recv_async_msg()
