@@ -419,6 +419,7 @@ void uhd_msg_handler(uhd::msg::type_t type, const std::string &msg)
 		LOG(ERR) << msg;
 		break;
 	case uhd::msg::fastpath:
+		std::cerr << msg << std::flush;
 		break;
 	}
 }

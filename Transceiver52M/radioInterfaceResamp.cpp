@@ -36,8 +36,9 @@ extern "C" {
 #define RESAMP_100M_INRATE			52
 #define RESAMP_100M_OUTRATE			75
 
-#define RESAMP_30_72M_INRATE			325
-#define RESAMP_30_72M_OUTRATE			576
+/* Resample 30.72 with 4.65549348231 Hz error */
+#define RESAMP_30_72M_INRATE			101
+#define RESAMP_30_72M_OUTRATE			179
 
 /* Universal resampling parameters */
 #define NUMCHUNKS				24
