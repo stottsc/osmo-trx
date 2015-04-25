@@ -457,7 +457,7 @@ void uhd_device::init_gains()
 {
 	uhd::gain_range_t range;
 
-	if (dev_type == UMTRX) {
+	if (dev_type == UMTRX or dev_type == NOVENA) {
 		std::vector<std::string> gain_stages = usrp_dev->get_tx_gain_names(0);
 		if (gain_stages[0] == "VGA") {
 			LOG(WARNING) << "Update your UHD version for a proper Tx gain support";
@@ -564,7 +564,7 @@ double uhd_device::setTxGain(double db, size_t chan)
 		return 0.0f;
 	}
 
-	if (dev_type == UMTRX) {
+	if (dev_type == UMTRX or dev_type == NOVENA) {
 		std::vector<std::string> gain_stages = usrp_dev->get_tx_gain_names(0);
 		if (gain_stages[0] == "VGA") {
 			LOG(WARNING) << "Update your UHD version for a proper Tx gain support";
