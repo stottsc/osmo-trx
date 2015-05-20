@@ -36,8 +36,6 @@
 #define E1XX_CLK_RT      52e6
 #define B100_BASE_RT     400000
 #define USRP2_BASE_RT    390625
-#define USRP_TX_AMPL     0.3
-#define UMTRX_TX_AMPL    0.7
 #define SAMPLE_BUF_SZ    (1 << 20)
 
 /*
@@ -287,7 +285,8 @@ private:
 */
 class uhd_device : public RadioDevice {
 public:
-	uhd_device(size_t sps, size_t chans, bool diversity, double offset);
+	uhd_device(size_t sps, size_t chans, double ampl,
+		   bool diversity, double offset);
 	~uhd_device();
 
 	int open(const std::string &args, bool extref);
@@ -352,6 +351,7 @@ private:
 
 	size_t sps, chans;
 	double tx_rate, rx_rate;
+	double tx_ampl, rx_ampl;
 
 	double tx_gain_min, tx_gain_max;
 	double rx_gain_min, rx_gain_max;
@@ -429,10 +429,10 @@ static void thread_enable_cancel(bool cancel)
 		 pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 }
 
-uhd_device::uhd_device(size_t sps, size_t chans, bool diversity, double offset)
-	: tx_gain_min(0.0), tx_gain_max(0.0),
-	  rx_gain_min(0.0), rx_gain_max(0.0),
-	  tx_spp(0), rx_spp(0),
+uhd_device::uhd_device(size_t sps, size_t chans, double ampl,
+		       bool diversity, double offset)
+	: tx_ampl(ampl), rx_ampl(1.0), tx_gain_min(0.0), tx_gain_max(0.0),
+	  rx_gain_min(0.0), rx_gain_max(0.0), tx_spp(0), rx_spp(0),
 	  started(false), aligned(false), rx_pkt_cnt(0), drop_cnt(0),
 	  prev_ts(0,0), ts_initial(0), ts_offset(0)
 {
@@ -1244,15 +1244,12 @@ double uhd_device::getRxFreq(size_t chan)
 
 double uhd_device::fullScaleInputValue()
 {
-	if (dev_type == UMTRX)
-		return (double) SHRT_MAX * UMTRX_TX_AMPL;
-	else
-		return (double) SHRT_MAX * USRP_TX_AMPL;
+	return (double) SHRT_MAX * tx_ampl;
 }
 
 double uhd_device::fullScaleOutputValue()
 {
-	return (double) SHRT_MAX;
+	return (double) SHRT_MAX * rx_ampl;
 }
 
 bool uhd_device::recv_async_msg()
@@ -1494,8 +1491,8 @@ std::string smpl_buf::str_code(ssize_t code)
 	}
 }
 
-RadioDevice *RadioDevice::make(size_t sps, size_t chans,
+RadioDevice *RadioDevice::make(size_t sps, size_t chans, double ampl,
 			       bool diversity, double offset)
 {
-	return new uhd_device(sps, chans, diversity, offset);
+	return new uhd_device(sps, chans, ampl, diversity, offset);
 }

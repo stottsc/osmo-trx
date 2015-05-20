@@ -70,6 +70,7 @@ struct trx_config {
 	bool extref;
 	bool diversity;
 	double offset;
+	double ampl;
 };
 
 ConfigurationTable gConfig;
@@ -175,6 +176,7 @@ bool trx_setup_config(struct trx_config *config)
 	ost << "   C0 Filler Table......... " << fillstr << std::endl;
 	ost << "   Diversity............... " << divstr << std::endl;
 	ost << "   Tuning offset........... " << config->offset << std::endl;
+	ost << "   Sample amplitude........ " << config->ampl << std::endl;
 	std::cout << ost << std::endl;
 
 	return true;
@@ -282,6 +284,7 @@ static void print_help()
 		"  -c    Number of ARFCN channels (default=1)\n"
 		"  -f    Enable C0 filler table\n"
 		"  -o    Set baseband frequency offset (default=auto)\n"
+		"  -m    Set sample amplitude (default=0.3)\n"
 		"  -r    Random burst test mode with TSC (0 to 7)\n",
 		"EMERG, ALERT, CRT, ERR, WARNING, NOTICE, INFO, DEBUG");
 }
@@ -298,8 +301,9 @@ static void handle_options(int argc, char **argv, struct trx_config *config)
 	config->filler = Transceiver::FILLER_ZERO;
 	config->diversity = false;
 	config->offset = 0.0;
+	config->ampl = 0.3;
 
-	while ((option = getopt(argc, argv, "ha:l:i:p:c:dxfo:s:r:")) != -1) {
+	while ((option = getopt(argc, argv, "ha:l:i:p:c:dxfo:s:r:m:")) != -1) {
 		switch (option) {
 		case 'h':
 			print_help();
@@ -339,6 +343,9 @@ static void handle_options(int argc, char **argv, struct trx_config *config)
 			config->rtsc = atoi(optarg);
 			config->filler = Transceiver::FILLER_RAND;
 			break;
+		case 'm':
+			config->ampl = atof(optarg);
+			break;
 		default:
 			print_help();
 			exit(0);
@@ -353,6 +360,13 @@ static void handle_options(int argc, char **argv, struct trx_config *config)
 
 	if (config->rtsc > 7) {
 		printf("Invalid training sequence %i\n\n", config->rtsc);
+		print_help();
+		exit(0);
+	}
+
+	if ((config->ampl < 0.0) || (config->ampl > 1.0)) {
+		printf("Invalid sample amplitude %f (0.0 to 1.0)\n\n",
+		       config->ampl);
 		print_help();
 		exit(0);
 	}
@@ -381,7 +395,7 @@ int main(int argc, char *argv[])
 	srandom(time(NULL));
 
 	/* Create the low level device object */
-	usrp = RadioDevice::make(config.sps, config.chans,
+	usrp = RadioDevice::make(config.sps, config.chans, config.ampl,
 				 config.diversity, config.offset);
 	type = usrp->open(config.dev_args, config.extref);
 	if (type < 0) {
