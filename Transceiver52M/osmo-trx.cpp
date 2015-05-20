@@ -58,6 +58,9 @@
 #define DEFAULT_DIVERSITY	false
 #define DEFAULT_CHANS		1
 
+/* Amplitude less than 0.0 triggers device specific default */
+#define DEFAULT_AMPL		-9999.0
+
 struct trx_config {
 	std::string log_level;
 	std::string addr;
@@ -301,7 +304,7 @@ static void handle_options(int argc, char **argv, struct trx_config *config)
 	config->filler = Transceiver::FILLER_ZERO;
 	config->diversity = false;
 	config->offset = 0.0;
-	config->ampl = 0.3;
+	config->ampl = DEFAULT_AMPL;
 
 	while ((option = getopt(argc, argv, "ha:l:i:p:c:dxfo:s:r:m:")) != -1) {
 		switch (option) {
@@ -360,13 +363,6 @@ static void handle_options(int argc, char **argv, struct trx_config *config)
 
 	if (config->rtsc > 7) {
 		printf("Invalid training sequence %i\n\n", config->rtsc);
-		print_help();
-		exit(0);
-	}
-
-	if ((config->ampl < 0.0) || (config->ampl > 1.0)) {
-		printf("Invalid sample amplitude %f (0.0 to 1.0)\n\n",
-		       config->ampl);
 		print_help();
 		exit(0);
 	}

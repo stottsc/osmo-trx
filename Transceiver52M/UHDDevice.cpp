@@ -36,6 +36,9 @@
 #define E1XX_CLK_RT      52e6
 #define B100_BASE_RT     400000
 #define USRP2_BASE_RT    390625
+#define USRP_TX_AMPL     0.3
+#define UMTRX_TX_AMPL    0.7
+#define MAX_TX_AMPL      1.0
 #define SAMPLE_BUF_SZ    (1 << 20)
 
 /*
@@ -454,7 +457,14 @@ void uhd_device::init_gains()
 {
 	uhd::gain_range_t range;
 
+	/* Clamp valid (0.0 - 1.0) transmit amplitude setting */
+	if (tx_ampl > MAX_TX_AMPL)
+		tx_ampl = 1.0;
+
 	if (dev_type == UMTRX) {
+		if (tx_ampl < 0.0)
+			tx_ampl = UMTRX_TX_AMPL;
+
 		std::vector<std::string> gain_stages = usrp_dev->get_tx_gain_names(0);
 		if (gain_stages[0] == "VGA") {
 			LOG(WARNING) << "Update your UHD version for a proper Tx gain support";
@@ -469,6 +479,9 @@ void uhd_device::init_gains()
 			tx_gain_max = UMTRX_VGA1_DEF + range.stop();
 		}
 	} else {
+		if (tx_ampl < 0.0)
+			tx_ampl = USRP_TX_AMPL;
+
 		range = usrp_dev->get_tx_gain_range();
 		tx_gain_min = range.start();
 		tx_gain_max = range.stop();
