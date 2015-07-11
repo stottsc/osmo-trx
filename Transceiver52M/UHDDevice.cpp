@@ -38,6 +38,7 @@
 #define USRP2_BASE_RT    390625
 #define USRP_TX_AMPL     0.3
 #define UMTRX_TX_AMPL    0.7
+#define NOVENA_BASE_RT   480000
 #define SAMPLE_BUF_SZ    (1 << 20)
 
 /*
@@ -63,6 +64,7 @@ enum uhd_dev_type {
 	E3XX,
 	X3XX,
 	UMTRX,
+	NOVENA,
 	NUM_USRP_TYPES,
 };
 
@@ -102,6 +104,8 @@ static struct uhd_dev_offset uhd_offsets[NUM_USRP_TYPES * 2] = {
 	{ X3XX,  4, 1.1264e-4, "X3XX 4 SPS"},
 	{ UMTRX, 1, 9.9692e-5, "UmTRX 1 SPS" },
 	{ UMTRX, 4, 7.3846e-5, "UmTRX 4 SPS" },
+	{ NOVENA, 1, 145.801000e-6, "Novena 1 SPS" }, //measured rtt delay @ GSM rate
+	{ NOVENA, 4, 38.541000e-6 + 4.430769230769231e-05, "Novena 4 SPS" }, //measured rtt delay @ GSM rate*4 + internal filter delay
 };
 
 /*
@@ -189,6 +193,8 @@ static double select_rate(uhd_dev_type type, int sps, bool diversity = false)
 	case E3XX:
 	case UMTRX:
 		return GSMRATE * sps;
+	case NOVENA:
+		return NOVENA_BASE_RT * sps;
 	default:
 		break;
 	}
@@ -419,6 +425,7 @@ void uhd_msg_handler(uhd::msg::type_t type, const std::string &msg)
 		LOG(ERR) << msg;
 		break;
 	case uhd::msg::fastpath:
+		std::cerr << msg << std::flush;
 		break;
 	}
 }
@@ -454,7 +461,7 @@ void uhd_device::init_gains()
 {
 	uhd::gain_range_t range;
 
-	if (dev_type == UMTRX) {
+	if (dev_type == UMTRX || dev_type == NOVENA) {
 		std::vector<std::string> gain_stages = usrp_dev->get_tx_gain_names(0);
 		if (gain_stages[0] == "VGA") {
 			LOG(WARNING) << "Update your UHD version for a proper Tx gain support";
@@ -563,7 +570,7 @@ double uhd_device::setTxGain(double db, size_t chan)
 		return 0.0f;
 	}
 
-	if (dev_type == UMTRX) {
+	if (dev_type == UMTRX || dev_type == NOVENA) {
 		std::vector<std::string> gain_stages = usrp_dev->get_tx_gain_names(0);
 		if (gain_stages[0] == "VGA" || gain_stages[0] == "PA") {
 			usrp_dev->set_tx_gain(db, chan);
@@ -623,7 +630,7 @@ bool uhd_device::parse_dev_type()
 	std::string mboard_str, dev_str;
 	uhd::property_tree::sptr prop_tree;
 	size_t usrp1_str, usrp2_str, e100_str, e110_str, e310_str,
-	       b100_str, b200_str, b210_str, x300_str, x310_str, umtrx_str;
+	       b100_str, b200_str, b210_str, x300_str, x310_str, umtrx_str, novena_str;
 
 	prop_tree = usrp_dev->get_device()->get_tree();
 	dev_str = prop_tree->access<std::string>("/name").get();
@@ -640,6 +647,7 @@ bool uhd_device::parse_dev_type()
 	x300_str = mboard_str.find("X300");
 	x310_str = mboard_str.find("X310");
 	umtrx_str = dev_str.find("UmTRX");
+	novena_str = dev_str.find("NOVENA");
 
 	if (usrp1_str != std::string::npos) {
 		LOG(ALERT) << "USRP1 is not supported using the UHD driver";
@@ -678,6 +686,9 @@ bool uhd_device::parse_dev_type()
 	} else if (umtrx_str != std::string::npos) {
 		tx_window = TX_WINDOW_FIXED;
 		dev_type = UMTRX;
+	} else if (novena_str != std::string::npos) {
+		tx_window = TX_WINDOW_FIXED;
+		dev_type = NOVENA;
 	} else {
 		LOG(ALERT) << "Unknown UHD device type " << dev_str;
 		return false;
@@ -801,6 +812,8 @@ int uhd_device::open(const std::string &args, bool extref)
 	case USRP2:
 	case X3XX:
 		return RESAMP_100M;
+	case NOVENA:
+		return RESAMP_30_72M;
 	case B200:
 	case B210:
 	case E1XX:
@@ -860,7 +873,7 @@ bool uhd_device::restart()
 	cmd.stream_now = false;
 	cmd.time_spec = uhd::time_spec_t(current.get_real_secs() + delay);
 
-	usrp_dev->issue_stream_cmd(cmd);
+	rx_stream->issue_stream_cmd(cmd);
 
 	return flush_recv(10);
 }
@@ -901,7 +914,7 @@ bool uhd_device::stop()
 	uhd::stream_cmd_t stream_cmd =
 		uhd::stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS;
 
-	usrp_dev->issue_stream_cmd(stream_cmd);
+	rx_stream->issue_stream_cmd(stream_cmd);
 
 	async_event_thrd->cancel();
 	async_event_thrd->join();
@@ -1244,7 +1257,7 @@ double uhd_device::getRxFreq(size_t chan)
 
 double uhd_device::fullScaleInputValue()
 {
-	if (dev_type == UMTRX)
+	if (dev_type == UMTRX || dev_type == NOVENA)
 		return (double) SHRT_MAX * UMTRX_TX_AMPL;
 	else
 		return (double) SHRT_MAX * USRP_TX_AMPL;
@@ -1260,7 +1273,7 @@ bool uhd_device::recv_async_msg()
 	uhd::async_metadata_t md;
 
 	thread_enable_cancel(false);
-	bool rc = usrp_dev->get_device()->recv_async_msg(md);
+	bool rc = tx_stream->recv_async_msg(md);
 	thread_enable_cancel(true);
 	if (!rc)
 		return false;
